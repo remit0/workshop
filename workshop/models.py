@@ -44,3 +44,32 @@ def baseline(data):
 
     assignments = assignments.reset_index().rename({"index": "family_id"}, axis=1)
     return assignments
+
+
+def random_pick(data):
+
+    data = data["n_people"]
+    assignments = pd.Series(name="assigned_day")
+    occupancies = pd.Series(0, index=range(1, 101))
+
+    day = 1
+    min_constraint_satisfied = False
+
+    for family_id, family_size in data.iteritems():
+
+        assignments.loc[family_id] = day
+        occupancies.loc[day] += family_size
+
+        # while min_constraint is not satisfied, we fill days in the ascending order
+        if occupancies.loc[day] > MIN_PPL and not min_constraint_satisfied:
+            day += 1
+        # case where we have satisfied the min_constraint but there are still families to be placed
+        if occupancies.loc[100] > MIN_PPL and not min_constraint_satisfied:
+            min_constraint_satisfied = True
+            day = 1
+        # to place the remaining families, we just add them uniformly on the calendar
+        if min_constraint_satisfied:
+            day = max((day + 1) % 100, 1)
+
+    assignments = assignments.reset_index().rename({"index": "family_id"}, axis=1)
+    return assignments
