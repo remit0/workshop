@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Tuple
 
 import pandas as pd
 
@@ -93,19 +93,23 @@ class BookMaker:
         group_cost = sum([group.cost() for group in self.assigned_groups])
         return group_cost + accounting_cost
 
-    def remove(self, group):
+    def remove(self, group: Group):
         """ removes the `group` from the waiting list """
         group_idx = [1 if group.num == grp.num else 0 for grp in self.groups].index(1)
         self.groups.pop(group_idx)
 
-    def assign(self, group, day):
+    def assign(self, group: Group, day: int):
         """ assigns the `group` to the `day` and updates classes accordingly """
         group.assign(day)
         self.assigned_groups.append(group)
         self.remove(group)
         self.bookings.loc[day] += group.size
 
-    def evaluate(self, group, day) -> float:
+    def batch_assign(self, groups: List[Group], day: int):
+        for group in groups:
+            self.assign(group, day)
+
+    def evaluate_one_group(self, group: Group, day: int) -> float:
         """ greedily evaluates the cost of assigning the `group` to `day`. Does not actually assign
         the `group`. """
         bookings_updated = self.bookings.copy()
@@ -113,15 +117,35 @@ class BookMaker:
         new_cost = self.accounting_cost(bookings_updated) + group.evaluate(day)
         return new_cost - self.cost()
 
-    def get_demand(self, rank) -> List[int]:
-        """ returns the list of days from the least to the most potentially crowded for a given
+    def evaluate_groups(self, day: int) -> List[Tuple[Group, float]]:
+        """ returns a list of tuple (group, cost) sorted according to increasing cost """
+        # todo : is it actually useful to compute both acc penalty and group penalty ?
+        groups_scored = list()
+        for group in self.groups:
+            groups_scored.append((group, self.evaluate_one_group(group, day)))
+        groups_scored = sorted(groups_scored, key=lambda x: x[1], reverse=False)
+        return groups_scored
+
+    def find_matching_groups(self, day: int, n: int) -> List[Group]:
+        """ finds the groups that minimizes the cost function to fill `n` people on `day` """
+        best_matches, total_size = list(), 0
+        groups_scored = self.evaluate_groups(day)
+        for group, _ in groups_scored:
+            total_size += group.size
+            best_matches.append(group)
+            if total_size >= n:
+                return best_matches
+
+    def get_demand(self, rank: int, ascending: bool) -> List[int]:
+        """ returns the list of days in ascending order for a given
         `rank` choice. (i.e. if we consider rank to be 0, computes the amount of people that have
         ranked each day with rank 0) """
+        # todo : shouldn't be demand conditional on actually available days ?
         demand = pd.Series(0, index=range(1, 101))
         for group in self.groups:
             demand.loc[group.days[rank]] += group.size
-        demand = demand.sort_values(ascending=True)
-        return demand.tolist()
+        demand = demand.sort_values(ascending=ascending)
+        return demand.index.tolist()
 
     def get_groups_by_sizes(self, size: int):
         """ returns groups that have `size` people """
