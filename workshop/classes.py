@@ -93,14 +93,6 @@ class BookMaker:
         group_cost = sum([group.cost() for group in self.assigned_groups])
         return group_cost + accounting_cost
 
-    def evaluate(self, group, day) -> float:
-        """ greedily evaluates the cost of assigning the `group` to `day`. Does not actually assign
-        the `group`. """
-        bookings_updated = self.bookings.copy()
-        bookings_updated.loc[day] += group.size
-        new_cost = self.accounting_cost(bookings_updated) + group.evaluate(day)
-        return new_cost - self.cost()
-
     def remove(self, group):
         """ removes the `group` from the waiting list """
         group_idx = [1 if group.num == grp.num else 0 for grp in self.groups].index(1)
@@ -112,6 +104,28 @@ class BookMaker:
         self.assigned_groups.append(group)
         self.remove(group)
         self.bookings.loc[day] += group.size
+
+    def evaluate(self, group, day) -> float:
+        """ greedily evaluates the cost of assigning the `group` to `day`. Does not actually assign
+        the `group`. """
+        bookings_updated = self.bookings.copy()
+        bookings_updated.loc[day] += group.size
+        new_cost = self.accounting_cost(bookings_updated) + group.evaluate(day)
+        return new_cost - self.cost()
+
+    def get_demand(self, rank) -> List[int]:
+        """ returns the list of days from the least to the most potentially crowded for a given
+        `rank` choice. (i.e. if we consider rank to be 0, computes the amount of people that have
+        ranked each day with rank 0) """
+        demand = pd.Series(0, index=range(1, 101))
+        for group in self.groups:
+            demand.loc[group.days[rank]] += group.size
+        demand = demand.sort_values(ascending=True)
+        return demand.tolist()
+
+    def get_groups_by_sizes(self, size: int):
+        """ returns groups that have `size` people """
+        return [group for group in self.groups if group.size == size]
 
     def make_submission(self, name: str):
         """ produces the kaggle submission file """
@@ -125,6 +139,7 @@ class BookMaker:
 
 
 def init(data: pd.DataFrame) -> BookMaker:
+    """ initializes a `BookMaker` from the input data """
 
     choices_col = ["choice_{}".format(i) for i in range(10)]
     groups = list()
