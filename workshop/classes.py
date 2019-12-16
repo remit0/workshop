@@ -134,9 +134,17 @@ class BookMaker:
         """ scores the wishes of a group and returns the less costly given current availabilities,
         if no wish is open, returns -1.
         Evaluates a group for a day 10 times. """
-        available_days = [day for day in group.days
-                          if self.bookings.loc[day] - group.size <= self.MAX]
-        return self.get_best_day(group, available_days)
+        valid_days = self.bookings[self.bookings <= self.MAX - group.size].index.tolist()
+        days = [day for day in valid_days if day in group.days]
+        if not days:
+            days = [day for day in valid_days if day not in group.days]
+        chosen_day, min_cost = -1, float("inf")
+        for day in days:
+            day_score = self.evaluate_one_group(group, day)
+            if day_score < min_cost:
+                min_cost = day_score
+                chosen_day = day
+        return chosen_day
 
     def get_forced_wish(self, group: Group) -> int:
         """ find the best matching day to assign a `group` that is not in its wishes :'( """
