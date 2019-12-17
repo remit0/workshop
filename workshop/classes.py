@@ -107,13 +107,8 @@ class BookMaker:
         self.bookings.loc[day] += group.size
         if self.verbose:
             print("**assigned group number {} to day {}.".format(group.num, group.assigned_day))
-            print("current bookings {}".format(self.bookings.sum()))
 
-    def batch_assign(self, groups: List[Group], day: int):
-        for group in groups:
-            self.assign(group, day)
-
-    def evaluate_one_group(self, group: Group, day: int) -> float:
+    def evaluate(self, group: Group, day: int) -> float:
         """ greedily evaluates the cost of assigning the `group` to `day`. Does not actually assign
         the `group`. """
         # todo : is there a way to compute over a smaller vector of bookings ?
@@ -121,60 +116,24 @@ class BookMaker:
         bookings_updated.loc[day] += group.size
         return self.accounting_cost(bookings_updated) + group.evaluate(day)
 
-    def evaluate_groups(self, day: int) -> List[Tuple[Group, float]]:
-        """ returns a list of tuple (group, cost) sorted according to increasing cost """
-        groups_scored = list()
-        for group in self.groups:
-            groups_scored.append((group, self.evaluate_one_group(group, day)))
-        groups_scored = sorted(groups_scored, key=lambda x: x[1], reverse=False)
-        return groups_scored
-
-    # ces deux fonctions c'est un peu overkill mais ça permet de réduire le temps de calcul
-    def get_best_wish(self, group: Group) -> int:
-        """ scores the wishes of a group and returns the less costly given current availabilities,
-        if no wish is open, returns -1.
-        Evaluates a group for a day 10 times. """
+    def optimise_day(self, group: Group) -> int:
+        """
+        scores the wishes of a group and returns the less costly given current availabilities
+        """
         valid_days = self.bookings[self.bookings <= self.MAX - group.size].index.tolist()
         days = [day for day in valid_days if day in group.days]
         if not days:
             days = [day for day in valid_days if day not in group.days]
         chosen_day, min_cost = -1, float("inf")
         for day in days:
-            day_score = self.evaluate_one_group(group, day)
+            day_score = self.evaluate(group, day)
             if day_score < min_cost:
                 min_cost = day_score
                 chosen_day = day
         return chosen_day
 
-    def get_forced_wish(self, group: Group) -> int:
-        """ find the best matching day to assign a `group` that is not in its wishes :'( """
-        available_days = self.bookings[self.bookings <= self.MAX - group.size].index.tolist()
-        available_days = [day for day in available_days if day not in group.days]
-        return self.get_best_day(group, available_days)
-
-    def get_best_day(self, group: Group, days: List[int]) -> int:
-        chosen_day, min_cost = -1, float("inf") # pas super élégant mais permet de ne pas appeler sorted sinon ça prend 3 heures
-        for day in days:
-            day_score = self.evaluate_one_group(group, day)
-            if day_score < min_cost:
-                min_cost = day_score
-                chosen_day = day
-        return chosen_day
-
-    def get_demand(self, rank: int, ascending: bool) -> List[int]:
-        """ returns the list of days in ascending order for a given
-        `rank` choice. (i.e. if we consider rank to be 0, computes the amount of people that have
-        ranked each day with rank 0) """
-        # todo : ça sert à rien pour le moment
-        demand = pd.Series(0, index=range(1, 101))
-        for group in self.groups:
-            demand.loc[group.days[rank]] += group.size
-        demand = demand.sort_values(ascending=ascending)
-        return demand.index.tolist()
-
-    def get_groups_by_sizes(self, size: int):
-        """ returns groups that have `size` people """
-        return [group for group in self.groups if group.size == size]
+    def optimise_group(self, day: int) -> Group:
+        pass
 
     def make_submission(self, name: str):
         """ produces the kaggle submission file """
